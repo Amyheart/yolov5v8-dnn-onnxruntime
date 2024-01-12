@@ -288,7 +288,7 @@ void Inference::DrawPred(cv::Mat& img, vector<Detection>& result) {
         cv::putText(img, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
     }
     // Detection mask
-    if (RunSegmentation) cv::addWeighted(img, 0.5, mask, 0.5, 0, img); //将mask加在原图上面
+    if (RunSegmentation) cv::addWeighted(img, 0.5, mask, 0.5, 0, img); //灏唌ask鍔犲湪鍘熷浘涓婇潰
     cv::imshow("Inference", img);
     cv::imwrite("out.bmp", img);
     cv::waitKey();

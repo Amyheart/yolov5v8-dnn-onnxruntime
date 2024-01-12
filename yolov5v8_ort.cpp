@@ -161,7 +161,7 @@ void DCSP_CORE::DrawPred(cv::Mat& img, std::vector<DCSP_RESULT>& result) {
         cv::putText(img, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
     }
     // Detection mask
-    if(RunSegmentation) cv::addWeighted(img, 0.5, mask, 0.5, 0, img); //将mask加在原图上面
+    if(RunSegmentation) cv::addWeighted(img, 0.5, mask, 0.5, 0, img); //灏唌ask鍔犲湪鍘熷浘涓婇潰
     cv::imshow("Inference", img);
     cv::imwrite("out.bmp", img);
     cv::waitKey();
@@ -246,7 +246,7 @@ char* DCSP_CORE::RunSession(cv::Mat& iImg, std::vector<DCSP_RESULT>& oResult) {
     char* Ret = RET_OK;
     cv::Mat processedImg;
     cv::Vec4d params;
-    //resize图片尺寸，PreProcess是直接resize，LetterBox有padding操作
+    //resize鍥剧墖灏哄锛孭reProcess鏄洿鎺esize锛孡etterBox鏈塸adding鎿嶄綔
     //PreProcess(iImg, imgSize, processedImg);
     LetterBox(iImg, processedImg, params, cv::Size(imgSize.at(1), imgSize.at(0)));
     if (modelType < 4) {
@@ -424,7 +424,7 @@ char* DCSP_CORE::WarmUpSession() {
     cv::Mat iImg = cv::Mat(cv::Size(imgSize.at(0), imgSize.at(1)), CV_8UC3);
     cv::Mat processedImg;
     cv::Vec4d params;
-    //resize图片尺寸，PreProcess是直接resize，LetterBox有padding操作
+    //resize鍥剧墖灏哄锛孭reProcess鏄洿鎺esize锛孡etterBox鏈塸adding鎿嶄綔
     //PreProcess(iImg, imgSize, processedImg);
     LetterBox(iImg, processedImg, params, cv::Size(imgSize.at(1), imgSize.at(0)));
     if (modelType < 4) {

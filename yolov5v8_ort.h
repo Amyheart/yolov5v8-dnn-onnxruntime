@@ -50,7 +50,7 @@ typedef struct _DCSP_RESULT {
     std::string className;
     float confidence;
     cv::Rect box;
-    cv::Mat boxMask;       //¾ØÐÎ¿òÄÚmask
+    cv::Mat boxMask;       //çŸ©å½¢æ¡†å†…mask
     cv::Scalar color;
 } DCSP_RESULT;
 
