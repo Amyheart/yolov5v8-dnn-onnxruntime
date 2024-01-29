@@ -19,7 +19,7 @@ struct Detection
     float confidence{ 0.0 };
     cv::Scalar color{};
     cv::Rect box{};
-    cv::Mat boxMask;       //矩形框内mask
+    cv::Mat boxMask; 
 };
 
 class Inference

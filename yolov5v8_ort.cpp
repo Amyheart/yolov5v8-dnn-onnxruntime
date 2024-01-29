@@ -268,7 +268,7 @@ char* DCSP_CORE::RunSession(cv::Mat& iImg, std::vector<DCSP_RESULT>& oResult) {
 
 
 template<typename N>
-char* DCSP_CORE::TensorProcess(clock_t& starttime_1, cv::Vec4d& params, cv::Mat& iImg, N& blob, std::vector<int64_t>& inputNodeDims, std::vector<DCSP_RESULT>& oResult) {
+char* DCSP_CORE::TensorProcess(clock_t& starttime_1, cv::Vec4d& params, cv::Mat& iImg, N* blob, std::vector<int64_t>& inputNodeDims, std::vector<DCSP_RESULT>& oResult) {
     Ort::Value inputTensor = Ort::Value::CreateTensor<typename std::remove_pointer<N>::type>(
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU), blob, 3 * imgSize.at(0) * imgSize.at(1), inputNodeDims.data(), inputNodeDims.size());
 #ifdef benchmark
@@ -281,56 +281,64 @@ char* DCSP_CORE::TensorProcess(clock_t& starttime_1, cv::Vec4d& params, cv::Mat&
 
     std::vector<int64_t> _outputTensorShape;
     _outputTensorShape = outputTensor[0].GetTensorTypeAndShapeInfo().GetShape();
-    auto output = outputTensor[0].GetTensorMutableData<typename std::remove_pointer<N>::type>();
+    //auto output = outputTensor[0].GetTensorMutableData<typename std::remove_pointer<N>::type>();
+    N* output = outputTensor[0].GetTensorMutableData<N>();
     delete blob;
     // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
     // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
     // yolov5
     int dimensions = _outputTensorShape[1];
     int rows = _outputTensorShape[2];
-    cv::Mat rowData(dimensions, rows, CV_32F, output);
+    cv::Mat rowData;
+    if(modelType<3) 
+        rowData=cv::Mat(dimensions, rows, CV_32F, output);
+    else 
+        rowData = cv::Mat(dimensions, rows, CV_16S, output);
     // yolov8
     if (rows > dimensions) { 
         dimensions = _outputTensorShape[2];
         rows = _outputTensorShape[1];
-        rowData = rowData.t();
+        rowData = rowData.t(); 
     }
     std::vector<int> class_ids;
     std::vector<float> confidences;
     std::vector<cv::Rect> boxes;
     std::vector<std::vector<float>> picked_proposals;
 
-    float* data = (float*)rowData.data;
+    N* data = (N*)rowData.data;
     for (int i = 0; i < dimensions; ++i) {
         switch (modelType) {
             case 0://V5_ORIGIN_FP32
+            case 7://V5_ORIGIN_FP16
             {
-                float confidence = data[4];
+                N confidence = data[4];
                 if (confidence >= modelConfidenceThreshold)
                 {
-                        float* classes_scores = data + 5;
-                        cv::Mat scores(1, classes.size(), CV_32FC1, classes_scores);
-                        cv::Point class_id;
-                        double max_class_score;
-                        minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
-                        if (max_class_score > rectConfidenceThreshold)
-                        {
-                            if (RunSegmentation) {
-                                int _segChannels = outputTensor[1].GetTensorTypeAndShapeInfo().GetShape()[1];
-                                std::vector<float> temp_proto(data + classes.size() + 5, data + classes.size() + 5 + _segChannels);
-                                picked_proposals.push_back(temp_proto);
-                            }
-                            confidences.push_back(confidence);
-                            class_ids.push_back(class_id.x);
-                            float x = (data[0] - params[2]) / params[0];
-                            float y = (data[1] - params[3]) / params[1];
-                            float w = data[2] / params[0];
-                            float h = data[3] / params[1];
-                            int left = MAX(round(x - 0.5 * w + 0.5), 0);
-                            int top = MAX(round(y - 0.5 * h + 0.5), 0);
-                            if ((left + w) > iImg.cols) { w = iImg.cols - left; }
-                            if ((top + h) > iImg.rows) { h = iImg.rows - top; }
-                            boxes.emplace_back(cv::Rect(left, top, int(w), int(h)));
+                    cv::Mat scores;
+                    if (modelType < 3) scores=cv::Mat(1, classes.size(), CV_32FC1, data + 5);
+                    else scores = cv::Mat(1, classes.size(), CV_16SC1, data + 5);
+					cv::Point class_id;
+					double max_class_score;
+					minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+                    max_class_score = *(data + 5 + class_id.x) * confidence;
+					if (max_class_score > rectConfidenceThreshold)
+					{
+						if (RunSegmentation) {
+							int _segChannels = outputTensor[1].GetTensorTypeAndShapeInfo().GetShape()[1];
+							std::vector<float> temp_proto(data + classes.size() + 5, data + classes.size() + 5 + _segChannels);
+							picked_proposals.push_back(temp_proto);
+						}
+						confidences.push_back(confidence);
+						class_ids.push_back(class_id.x);
+						float x = (data[0] - params[2]) / params[0];
+						float y = (data[1] - params[3]) / params[1];
+						float w = data[2] / params[0];
+						float h = data[3] / params[1];
+						int left = MAX(round(x - 0.5 * w + 0.5), 0);
+						int top = MAX(round(y - 0.5 * h + 0.5), 0);
+						if ((left + w) > iImg.cols) { w = iImg.cols - left; }
+						if ((top + h) > iImg.rows) { h = iImg.rows - top; }
+						boxes.emplace_back(cv::Rect(left, top, int(w), int(h)));
                     }
                 }
                 break;
@@ -338,11 +346,13 @@ char* DCSP_CORE::TensorProcess(clock_t& starttime_1, cv::Vec4d& params, cv::Mat&
             case 1://V8_ORIGIN_FP32
             case 4://V8_ORIGIN_FP16
             {
-                float* classesScores = data + 4;
-                cv::Mat scores(1, this->classes.size(), CV_32FC1, classesScores);
+				cv::Mat scores;
+				if (modelType < 3) scores = cv::Mat(1, classes.size(), CV_32FC1, data + 4);
+				else scores = cv::Mat(1, classes.size(), CV_16SC1, data + 4);
                 cv::Point class_id;
                 double maxClassScore;
                 cv::minMaxLoc(scores, 0, &maxClassScore, 0, &class_id);
+                maxClassScore = *(data + 4 + class_id.x);
                 if (maxClassScore > rectConfidenceThreshold) {
                     if (RunSegmentation) {
                         int _segChannels = outputTensor[1].GetTensorTypeAndShapeInfo().GetShape()[1];
@@ -393,7 +403,7 @@ char* DCSP_CORE::TensorProcess(clock_t& starttime_1, cv::Vec4d& params, cv::Mat&
         int _segChannels = _outputMaskTensorShape[1];
         int _segWidth = _outputMaskTensorShape[2];
         int _segHeight = _outputMaskTensorShape[3];
-        float* pdata = outputTensor[1].GetTensorMutableData<float>();
+        N* pdata = outputTensor[1].GetTensorMutableData<N>();
         std::vector<float> mask(pdata, pdata + _segChannels * _segWidth * _segHeight);
         int _seg_params[5] = { _segChannels, _segWidth, _segHeight, inputNodeDims[2], inputNodeDims[3] };
         cv::Mat mask_protos = cv::Mat(mask);
